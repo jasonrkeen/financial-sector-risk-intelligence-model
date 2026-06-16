@@ -1,0 +1,30 @@
+# Environment variables / secrets
+.env
+
+# Python virtual environments
+.venv/
+.venv-1/
+.venv-2/
+venv/
+env/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Data and generated outputs
+data/raw/
+data/processed/
+outputs/
+
+# Logs
+*.log
+
+# OS / editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
