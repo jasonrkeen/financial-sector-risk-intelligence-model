@@ -629,6 +629,8 @@ def generate_pdf_report(
         ),
     )
 
+    if "data_mode" in scored_df and scored_df["data_mode"].eq("demonstration").any():
+        story.insert(0, Paragraph("DEMONSTRATION: manually assigned seed inputs; not live evidence.", body_style))
     story.append(Paragraph("Methodology", heading_style))
     story.append(
         Paragraph(

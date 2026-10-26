@@ -205,6 +205,8 @@ def build_market_stress_signal(metrics: pd.DataFrame) -> pd.DataFrame:
         )
 
     lookup = metrics.set_index("ticker").to_dict(orient="index")
+    missing_tickers = sorted(set(MARKET_TICKERS) - set(lookup))
+    status = "Partial: missing " + ", ".join(missing_tickers) if missing_tickers else "Active"
 
     xlf = lookup.get("XLF", {})
     kbe = lookup.get("KBE", {})
@@ -276,7 +278,7 @@ def build_market_stress_signal(metrics: pd.DataFrame) -> pd.DataFrame:
                 "market_data_stress_signal": market_data_stress_signal,
                 "market_data_banking_signal": market_data_banking_signal,
                 "market_data_volatility_signal": market_data_volatility_signal,
-                "market_data_status": "Active",
+                "market_data_status": status,
             }
         ]
     )

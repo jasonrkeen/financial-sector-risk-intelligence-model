@@ -23,7 +23,7 @@ Commands documented in README.md (referenced files exist):
 python -m venv .venv
 pip install -r requirements.txt
 ```
-- No automated tests exist yet; if adding them, use pytest under `tests/`.
+- Run offline regression tests with `python -m pytest -q` (install `requirements-dev.txt`); add tests under `tests/`.
 
 ## Conventions observed
 - Functions use type hints; keep annotating new code.

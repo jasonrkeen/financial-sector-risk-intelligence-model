@@ -1,7 +1,9 @@
+from dataclasses import dataclass
+
 import pandas as pd
 
 from src.world_bank_live import build_live_world_bank_financial_risk_dataset
-from src.fatf_sanctions import apply_fatf_sanctions_layer
+from src.fatf_sanctions import apply_fatf_sanctions_layer, FATF_REFERENCE_LAST_REVIEWED
 from src.market_data import build_market_data_outputs, apply_market_data_layer
 from src.acled_live import build_acled_live_outputs, apply_acled_layer
 
@@ -293,50 +295,69 @@ def build_seed_financial_risk_dataset() -> pd.DataFrame:
     return pd.DataFrame(records)
 
 
-def build_financial_risk_dataset(use_live_data: bool = True) -> pd.DataFrame:
-    """
-    Build the model input dataset.
+@dataclass
+class InputBundle:
+    """Inputs and the exact supporting evidence fetched for one run."""
 
-    Defaults to live World Bank public data. Falls back to the seed dataset
-    if the live pull fails. Applies FATF/sanctions, market-data, and ACLED
-    geopolitical event-data adjustments.
-    """
+    dataset: pd.DataFrame
+    market_history: pd.DataFrame
+    market_metrics: pd.DataFrame
+    market_signal: pd.DataFrame
+    acled_events: pd.DataFrame
+    acled_signals: pd.DataFrame
+    source_status: dict[str, str]
 
+
+def build_input_bundle(use_live_data: bool = True) -> InputBundle:
+    """Live mode requires World Bank data; demo mode makes no network requests."""
     if use_live_data:
+        # Do not substitute manually assigned seed values for failed live data.
+        dataset = build_live_world_bank_financial_risk_dataset()
+        if dataset.empty:
+            raise RuntimeError("World Bank returned no model inputs; use --demo for offline examples.")
+        mode = "live"
+    else:
+        dataset = build_seed_financial_risk_dataset()
+        dataset["world_bank_status"] = "Disabled: demonstration seed data"
+        mode = "demonstration"
+    dataset = apply_fatf_sanctions_layer(dataset)
+    dataset["data_mode"] = mode
+    market_history = pd.DataFrame(columns=["date", "ticker", "close"])
+    market_metrics = pd.DataFrame(columns=["ticker", "observations"])
+    market_signal = pd.DataFrame(columns=["market_data_status"])
+    acled_events = pd.DataFrame(columns=["event_id_cnty", "event_date", "country"])
+    acled_signals = pd.DataFrame(columns=["country", "acled_status"])
+    dataset["market_data_status"] = "Disabled: demonstration mode"
+    dataset["acled_status"] = "Disabled: demonstration mode"
+    if use_live_data:
+        market_history, market_metrics, market_signal = build_market_data_outputs()
+        dataset = apply_market_data_layer(dataset, market_signal)
+        # Optional event-source failures must not discard valid macro inputs.
         try:
-            live_df = build_live_world_bank_financial_risk_dataset()
-            adjusted_df = apply_fatf_sanctions_layer(live_df)
-
-            _, _, market_signal = build_market_data_outputs()
-            adjusted_df = apply_market_data_layer(adjusted_df, market_signal)
-
             acled_events, acled_signals = build_acled_live_outputs(
-                countries=adjusted_df["country"].tolist(),
-                days_back=90,
+                countries=dataset["country"].tolist(), days_back=90,
             )
-            adjusted_df = apply_acled_layer(adjusted_df, acled_signals)
-
-            return adjusted_df
+            dataset = apply_acled_layer(dataset.drop(columns="acled_status"), acled_signals)
         except Exception as exc:
-            print(f"[WARN] Live data pull failed: {exc}")
-            print("[WARN] Falling back to seed financial risk dataset.")
+            dataset["acled_status"] = f"Unavailable: {type(exc).__name__}; no adjustment"
+            acled_events = pd.DataFrame(columns=["event_id_cnty", "event_date", "country"])
+            acled_signals = pd.DataFrame(columns=["country", "acled_status"])
+    # Coverage rows include countries absent from the event response, with unknown values.
+    acled_signals = pd.DataFrame({"country": dataset["country"]}).merge(
+        acled_signals.drop(columns="acled_status", errors="ignore"),
+        on="country", how="left", validate="one_to_one",
+    )
+    acled_signals["acled_status"] = dataset["acled_status"].to_numpy()
+    statuses = {
+        "World Bank API": "; ".join(sorted(dataset["world_bank_status"].unique())),
+        "Market data": "; ".join(sorted(dataset["market_data_status"].unique())),
+        "ACLED live event data": "; ".join(sorted(dataset["acled_status"].unique())),
+        "FATF / sanctions reference": f"Manual reference: last reviewed {FATF_REFERENCE_LAST_REVIEWED}",
+    }
+    return InputBundle(dataset, market_history, market_metrics, market_signal,
+                       acled_events, acled_signals, statuses)
 
-    seed_df = build_seed_financial_risk_dataset()
-    adjusted_df = apply_fatf_sanctions_layer(seed_df)
 
-    try:
-        _, _, market_signal = build_market_data_outputs()
-        adjusted_df = apply_market_data_layer(adjusted_df, market_signal)
-    except Exception as exc:
-        print(f"[WARN] Market data pull failed during seed fallback: {exc}")
-
-    try:
-        acled_events, acled_signals = build_acled_live_outputs(
-            countries=adjusted_df["country"].tolist(),
-            days_back=90,
-        )
-        adjusted_df = apply_acled_layer(adjusted_df, acled_signals)
-    except Exception as exc:
-        print(f"[WARN] ACLED pull failed during seed fallback: {exc}")
-
-    return adjusted_df
+def build_financial_risk_dataset(use_live_data: bool = True) -> pd.DataFrame:
+    """Compatibility wrapper; False is a strictly offline demonstration."""
+    return build_input_bundle(use_live_data=use_live_data).dataset

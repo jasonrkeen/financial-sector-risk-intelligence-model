@@ -20,6 +20,7 @@ import numpy as np
 import pandas as pd
 import requests
 from dotenv import load_dotenv
+from src.config import ACLED_MAX_PAGES
 
 
 ACLED_API_BASE_URL = "https://acleddata.com/api/acled/read"
@@ -136,12 +137,14 @@ def fetch_acled_events(
     """
     Fetch ACLED events for selected countries and date range.
 
-    The query uses country-level filters and returns a bounded number of records.
+    The query uses country-level filters and verifies cursor pagination completion.
     Credentials are exchanged for an OAuth bearer token and are not sent in the URL.
     """
 
     if countries is None:
         countries = DEFAULT_COUNTRIES
+    if not countries or days_back < 1 or limit < 1:
+        raise ValueError("Countries, positive days_back and positive limit are required")
 
     username, password = load_acled_credentials()
     access_token = request_acled_token(username=username, password=password)
@@ -156,10 +159,11 @@ def fetch_acled_events(
 
     params = {
         "country": country_filter,
-        "country_where": "IN",
         "event_date": f"{start_date}|{end_date}",
         "event_date_where": "BETWEEN",
         "limit": limit,
+        "cursor": 0,
+        "with_total": "true",
         "_format": "json",
         "fields": (
             "event_id_cnty|event_date|country|region|admin1|event_type|"
@@ -167,34 +171,57 @@ def fetch_acled_events(
         ),
     }
 
-    response = requests.get(
-        ACLED_API_BASE_URL,
-        headers=headers,
-        params=params,
-        timeout=45,
-    )
-
-    if response.status_code != 200:
-        raise RuntimeError(
-            "ACLED data request failed.\n"
-            f"Status code: {response.status_code}\n"
-            f"Response: {response.text[:800]}"
-        )
-
-    payload: dict[str, Any] = response.json()
-
-    if payload.get("success") is False:
-        raise RuntimeError(f"ACLED API returned unsuccessful response: {payload}")
-
-    data = payload.get("data", [])
-
-    if not data:
-        return pd.DataFrame()
-
-    events = pd.DataFrame(data)
-
+    # Cursor protocol: https://acleddata.com/api-documentation/elements-acleds-api
+    records: dict[str, dict[str, Any]] = {}
+    seen_cursors = {"0"}
+    expected_total: int | None = None
+    for _ in range(ACLED_MAX_PAGES):
+        response = requests.get(ACLED_API_BASE_URL, headers=headers, params=params.copy(), timeout=45)
+        response.raise_for_status()
+        payload = response.json()
+        if not isinstance(payload, dict) or payload.get("success") is False:
+            raise RuntimeError("ACLED returned an unsuccessful or malformed response")
+        data = payload.get("data")
+        if not isinstance(data, list) or "next_cursor" not in payload:
+            raise RuntimeError("ACLED response lacks data or cursor completion metadata")
+        total = payload.get("total_count")
+        if total is not None:
+            total = int(total)
+            if total < 0 or (expected_total is not None and total != expected_total):
+                raise RuntimeError("ACLED total changed during pagination")
+            expected_total = total
+        previous_count = len(records)
+        for item in data:
+            if not isinstance(item, dict) or not item.get("event_id_cnty"):
+                raise RuntimeError("ACLED event is missing its unique ID")
+            event_id = str(item["event_id_cnty"])
+            if event_id in records and records[event_id] != item:
+                raise RuntimeError("ACLED duplicate ID has conflicting data")
+            records[event_id] = item
+        cursor = payload["next_cursor"]
+        if cursor is None:
+            break
+        if str(cursor) in seen_cursors or len(records) == previous_count:
+            raise RuntimeError("ACLED pagination did not advance")
+        seen_cursors.add(str(cursor))
+        params["cursor"] = cursor
+    else:
+        raise RuntimeError("ACLED page safety limit reached; response is incomplete")
+    if expected_total is not None and len(records) != expected_total:
+        raise RuntimeError("ACLED unique event count does not match total_count")
+    events = pd.DataFrame(records.values())
     if events.empty:
-        return events
+        return pd.DataFrame(columns=["event_id_cnty", "event_date", "country", "event_type", "fatalities", "admin1"])
+    required = {"country", "event_date", "event_type", "fatalities"}
+    if not required.issubset(events.columns):
+        raise RuntimeError("ACLED events missing required fields")
+    dates = pd.to_datetime(events["event_date"], errors="coerce")
+    if dates.isna().any() or not dates.between(pd.Timestamp(start_date), pd.Timestamp(end_date)).all():
+        raise RuntimeError("ACLED response contains invalid or out-of-window dates")
+    if not events["country"].isin(countries).all():
+        raise RuntimeError("ACLED response contains unexpected countries")
+    if events["event_type"].isna().any():
+        raise RuntimeError("ACLED events missing event types")
 
     events["event_date"] = pd.to_datetime(
         events.get("event_date"),
@@ -415,6 +442,7 @@ def apply_acled_layer(
         acled_signals,
         on="country",
         how="left",
+        validate="one_to_one",
     )
 
     signal_columns = [
@@ -424,9 +452,13 @@ def apply_acled_layer(
     ]
 
     for column in signal_columns:
-        merged[column] = pd.to_numeric(merged[column], errors="coerce").fillna(0.0)
+        merged[column] = pd.to_numeric(merged[column], errors="coerce")
 
     merged["acled_status"] = merged["acled_status"].fillna("Fallback: country missing")
+
+    covered = np.isfinite(merged[signal_columns]).all(axis=1) & merged["acled_status"].eq("Active")
+    merged.loc[~covered, "acled_status"] = "Unavailable: country coverage unverified; no adjustment"
+    original = merged[["geopolitical_instability", "market_stress_proxy", "banking_stress_proxy"]].copy()
 
     merged["geopolitical_instability"] = (
         0.70 * merged["geopolitical_instability"]
@@ -443,4 +475,5 @@ def apply_acled_layer(
         + 0.15 * merged["acled_banking_pressure_signal"]
     ).clip(0, 100).round(2)
 
+    merged.loc[~covered, original.columns] = original.loc[~covered]
     return merged

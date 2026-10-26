@@ -42,7 +42,7 @@ def row_count(path: Path) -> int | None:
         return None
 
 
-def build_live_source_status_table() -> pd.DataFrame:
+def build_live_source_status_table(source_status: dict[str, str] | None = None) -> pd.DataFrame:
     """Build a source-status table from current pipeline outputs."""
 
     sources = [
@@ -51,7 +51,7 @@ def build_live_source_status_table() -> pd.DataFrame:
             "source_type": "Live public API",
             "output_file": RAW_DIR / "live_financial_risk_dataset.csv",
             "model_use": "Macro, governance, inflation, debt, GDP growth proxies",
-            "status_note": "Active when live dataset is populated; seed fallback if unavailable.",
+            "status_note": "Run status identifies live inputs or explicitly selected demonstration seeds.",
         },
         {
             "source_layer": "FATF / sanctions reference",
@@ -65,7 +65,7 @@ def build_live_source_status_table() -> pd.DataFrame:
             "source_type": "Live public market data connector",
             "output_file": TABLES_DIR / "market_stress_signal.csv",
             "model_use": "Market stress, banking pressure, volatility signal",
-            "status_note": "Active when market signal table is populated; fallback if market pull fails.",
+            "status_note": "Read source_status for active, partial, fallback, or disabled connector state.",
         },
         {
             "source_layer": "Market history",
@@ -114,6 +114,12 @@ def build_live_source_status_table() -> pd.DataFrame:
                 "source_layer": source["source_layer"],
                 "source_type": source["source_type"],
                 "output_file": str(path),
+                "source_status": (source_status or {}).get(
+                    {"Market history": "Market data", "ACLED country signals": "ACLED live event data"}.get(
+                        source["source_layer"], source["source_layer"]),
+                    "Generated this run" if source_status is not None and source["source_layer"] in
+                    {"Monte Carlo robustness", "Scenario analysis"} else "Unknown: no run status supplied",
+                ),
                 "file_status": file_status(path),
                 "row_count": row_count(path),
                 "model_use": source["model_use"],

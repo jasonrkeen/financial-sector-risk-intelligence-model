@@ -12,9 +12,7 @@ criminal acts, or replace legal, compliance, regulatory, or professional judgmen
 import pandas as pd
 
 from src.config import RAW_DIR, PROCESSED_DIR, TABLES_DIR, ensure_directories
-from src.data_sources import build_financial_risk_dataset
-from src.market_data import build_market_data_outputs
-from src.acled_live import build_acled_live_outputs
+from src.data_sources import build_input_bundle, InputBundle
 from src.scoring import (
     calculate_layer_scores,
     calculate_composite_score,
@@ -98,91 +96,31 @@ def print_summary(scored_df: pd.DataFrame) -> None:
     print("=" * 72)
 
 
-def save_market_outputs() -> None:
-    """Fetch and save market data outputs."""
-
-    market_history, market_metrics, market_signal = build_market_data_outputs()
-
-    market_history.to_csv(
-        RAW_DIR / "market_history.csv",
-        index=False,
-    )
-
-    market_metrics.to_csv(
-        TABLES_DIR / "market_metrics.csv",
-        index=False,
-    )
-
-    market_signal.to_csv(
-        TABLES_DIR / "market_stress_signal.csv",
-        index=False,
-    )
+def save_input_evidence(bundle: InputBundle) -> None:
+    """Export exactly the evidence used to build this run's model inputs."""
+    for frame, path in [
+        (bundle.market_history, RAW_DIR / "market_history.csv"),
+        (bundle.market_metrics, TABLES_DIR / "market_metrics.csv"),
+        (bundle.market_signal, TABLES_DIR / "market_stress_signal.csv"),
+        (bundle.acled_events, RAW_DIR / "acled_events_90d.csv"),
+        (bundle.acled_signals, TABLES_DIR / "acled_country_signals.csv"),
+    ]:
+        # A failed connector may return a columnless dataframe: keep CSV readable.
+        if not len(frame.columns):
+            frame = pd.DataFrame(columns=["status"])
+        frame.to_csv(path, index=False)
 
 
-def save_acled_outputs(countries: list[str]) -> None:
-    """Fetch and save ACLED raw events and country-level signals."""
-
-    try:
-        acled_events, acled_signals = build_acled_live_outputs(
-            countries=countries,
-            days_back=90,
-        )
-
-        acled_events.to_csv(
-            RAW_DIR / "acled_events_90d.csv",
-            index=False,
-        )
-
-        acled_signals.to_csv(
-            TABLES_DIR / "acled_country_signals.csv",
-            index=False,
-        )
-
-    except Exception as exc:
-        print(f"[WARN] ACLED output save failed: {exc}")
-
-        fallback_signals = pd.DataFrame(
-            [
-                {
-                    "country": country,
-                    "acled_events_90d": 0,
-                    "acled_fatalities_90d": 0,
-                    "acled_political_violence_events_90d": 0,
-                    "acled_demonstration_events_90d": 0,
-                    "acled_civilian_targeting_events_90d": 0,
-                    "acled_admin1_spread_90d": 0,
-                    "acled_geopolitical_instability_signal": 0,
-                    "acled_market_disruption_signal": 0,
-                    "acled_banking_pressure_signal": 0,
-                    "acled_status": f"Fallback: {exc}",
-                }
-                for country in countries
-            ]
-        )
-
-        fallback_events = pd.DataFrame()
-
-        fallback_events.to_csv(
-            RAW_DIR / "acled_events_90d.csv",
-            index=False,
-        )
-
-        fallback_signals.to_csv(
-            TABLES_DIR / "acled_country_signals.csv",
-            index=False,
-        )
-
-
-def run_pipeline() -> pd.DataFrame:
+def run_pipeline(use_live_data: bool = True) -> pd.DataFrame:
     """Run the complete financial-sector risk model pipeline."""
 
     ensure_directories()
 
-    input_df = build_financial_risk_dataset(use_live_data=True)
+    bundle = build_input_bundle(use_live_data=use_live_data)
+    input_df = bundle.dataset
     input_df.to_csv(RAW_DIR / "live_financial_risk_dataset.csv", index=False)
 
-    save_market_outputs()
-    save_acled_outputs(countries=input_df["country"].tolist())
+    save_input_evidence(bundle)
 
     scored_df = calculate_layer_scores(input_df)
     scored_df = calculate_composite_score(scored_df)
@@ -191,7 +129,7 @@ def run_pipeline() -> pd.DataFrame:
     processed_path = PROCESSED_DIR / "processed_financial_sector_risk_data.csv"
     scored_df.to_csv(processed_path, index=False)
 
-    save_outputs(scored_df)
+    save_outputs(scored_df, source_status=bundle.source_status)
 
     scenario_df = run_scenario_analysis(scored_df)
     scenario_summary = build_scenario_summary(scenario_df)
@@ -215,10 +153,18 @@ def run_pipeline() -> pd.DataFrame:
         monte_carlo_summary=monte_carlo_summary,
     )
 
+    from src.source_status import build_live_source_status_table
+    build_live_source_status_table(bundle.source_status).to_csv(
+        TABLES_DIR / "live_source_status.csv", index=False,
+    )
     print_summary(scored_df)
 
     return scored_df
 
 
 if __name__ == "__main__":
-    run_pipeline()
+    import argparse
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--demo", action="store_true", help="Offline seed demonstration; no live requests")
+    args = parser.parse_args()
+    run_pipeline(use_live_data=not args.demo)
