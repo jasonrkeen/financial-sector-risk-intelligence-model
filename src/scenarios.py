@@ -1,6 +1,6 @@
 import pandas as pd
 
-from src.scoring import classify_risk_band
+from src.scoring import classify_risk_band, validate_scored_inputs
 
 
 SCENARIOS = {
@@ -88,6 +88,7 @@ def calculate_scenario_score(row: pd.Series, scenario_multipliers: dict) -> floa
 def run_scenario_analysis(scored_df: pd.DataFrame) -> pd.DataFrame:
     """Run all scenario adjustments against the scored country dataset."""
 
+    validate_scored_inputs(scored_df)
     scenario_records = []
 
     for scenario_name, multipliers in SCENARIOS.items():

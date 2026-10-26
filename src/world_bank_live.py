@@ -239,7 +239,7 @@ def fetch_latest_world_bank_data(
         if indicator.output_column in merged.columns
     ]
 
-    return merged[output_columns].copy()
+    return merged[output_columns + existing_year_columns].copy()
 
 
 def get_column_or_fallback(
@@ -436,7 +436,8 @@ def build_live_world_bank_financial_risk_dataset() -> pd.DataFrame:
         "cyber_operational_pressure",
     ]
 
-    return live_df[model_columns].copy()
+    provenance_columns = [col for col in live_df.columns if col not in model_columns]
+    return live_df[model_columns + provenance_columns].copy()
 
 
 def build_world_bank_source_metadata() -> pd.DataFrame:

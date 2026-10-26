@@ -4,11 +4,13 @@ import pandas as pd
 
 def clip_score(series: pd.Series) -> pd.Series:
     """Keep score values within a 0-100 range."""
-    return series.clip(lower=0, upper=100)
+    return series.replace([np.inf, -np.inf], np.nan).clip(lower=0, upper=100)
 
 
 def classify_risk_band(score: float) -> str:
     """Convert numeric score to a simple risk band."""
+    if pd.isna(score) or not np.isfinite(score):
+        return "Unknown"
     if score < 25:
         return "Low"
     if score < 50:
@@ -30,7 +32,7 @@ def calculate_layer_scores(df: pd.DataFrame) -> pd.DataFrame:
                 "inflation_pressure",
                 "currency_pressure",
             ]
-        ].mean(axis=1)
+        ].mean(axis=1, skipna=False)
     )
 
     scored["financial_crime_exposure_risk"] = clip_score(
@@ -40,7 +42,7 @@ def calculate_layer_scores(df: pd.DataFrame) -> pd.DataFrame:
                 "corruption_risk",
                 "aml_cft_weakness",
             ]
-        ].mean(axis=1)
+        ].mean(axis=1, skipna=False)
     )
 
     scored["governance_regulatory_risk"] = clip_score(
@@ -50,7 +52,7 @@ def calculate_layer_scores(df: pd.DataFrame) -> pd.DataFrame:
                 "regulatory_quality_weakness",
                 "corruption_risk",
             ]
-        ].mean(axis=1)
+        ].mean(axis=1, skipna=False)
     )
 
     scored["banking_macro_stress_risk"] = clip_score(
@@ -60,7 +62,7 @@ def calculate_layer_scores(df: pd.DataFrame) -> pd.DataFrame:
                 "sovereign_debt_pressure",
                 "market_stress_proxy",
             ]
-        ].mean(axis=1)
+        ].mean(axis=1, skipna=False)
     )
 
     scored["sanctions_geopolitical_risk"] = clip_score(
@@ -70,7 +72,7 @@ def calculate_layer_scores(df: pd.DataFrame) -> pd.DataFrame:
                 "geopolitical_instability",
                 "governance_weakness",
             ]
-        ].mean(axis=1)
+        ].mean(axis=1, skipna=False)
     )
 
     scored["cyber_operational_risk"] = clip_score(
@@ -127,13 +129,18 @@ def identify_primary_driver(row: pd.Series) -> str:
         "cyber_operational_risk": "Cyber / Operational",
     }
 
-    highest_column = max(layer_columns.keys(), key=lambda col: row[col])
+    weights = [0.20, 0.20, 0.20, 0.15, 0.15, 0.10]
+    if any(pd.isna(row[col]) or not np.isfinite(row[col]) for col in layer_columns):
+        return "Unknown"
+    contributions = {col: row[col] * weight for col, weight in zip(layer_columns, weights)}
+    highest_column = max(contributions, key=contributions.get)
     return layer_columns[highest_column]
 
 
 def add_driver_analysis(df: pd.DataFrame) -> pd.DataFrame:
     """Add primary driver and ranked output fields."""
 
+    validate_scored_inputs(df)
     scored = df.copy()
 
     scored["primary_risk_driver"] = scored.apply(identify_primary_driver, axis=1)
@@ -146,3 +153,13 @@ def add_driver_analysis(df: pd.DataFrame) -> pd.DataFrame:
     scored.insert(0, "rank", np.arange(1, len(scored) + 1))
 
     return scored
+
+
+def validate_scored_inputs(df: pd.DataFrame) -> None:
+    """Unknown scores are diagnostic values, not valid ranking/simulation inputs."""
+    columns = ["market_stress_risk", "financial_crime_exposure_risk",
+               "governance_regulatory_risk", "banking_macro_stress_risk",
+               "sanctions_geopolitical_risk", "cyber_operational_risk",
+               "financial_sector_risk_score"]
+    if df.empty or not np.isfinite(df[columns].to_numpy(dtype=float)).all():
+        raise ValueError("Ranking and simulation require finite scores for every jurisdiction")

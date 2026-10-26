@@ -5,6 +5,9 @@ Interactive Streamlit dashboard for the Financial Sector Risk Intelligence Model
 """
 
 from pathlib import Path
+from io import BytesIO
+
+from src.publication import read_snapshot, SnapshotUnavailable
 
 import pandas as pd
 import plotly.express as px
@@ -24,16 +27,10 @@ st.set_page_config(
 )
 
 
-@st.cache_data
-def load_table(filename: str) -> pd.DataFrame:
-    """Load an output CSV table."""
-
-    path = TABLES_DIR / filename
-
-    if not path.exists():
-        return pd.DataFrame()
-
-    return pd.read_csv(path)
+def load_table(filename: str, snapshot: dict[str, bytes]) -> pd.DataFrame:
+    """Load from a single completed snapshot, never from mutable working files."""
+    content = snapshot.get(f"tables/{filename}")
+    return pd.read_csv(BytesIO(content)) if content is not None else pd.DataFrame()
 
 
 def risk_band_filter(df: pd.DataFrame) -> pd.DataFrame:
@@ -63,20 +60,14 @@ def risk_band_filter(df: pd.DataFrame) -> pd.DataFrame:
     return filtered
 
 
-def show_download_button(file_path: Path, label: str, mime: str) -> None:
-    """Show a download button if a file exists."""
-
-    if not file_path.exists():
-        st.info(f"File not found yet: {file_path.name}")
+def show_download_button(file_path: Path, label: str, mime: str, snapshot: dict[str, bytes]) -> None:
+    """Downloads use the same snapshot bytes as the displayed results."""
+    key = f"{file_path.parent.name}/{file_path.name}"
+    content = snapshot.get(key)
+    if content is None:
+        st.info(f"File not found in completed run: {file_path.name}")
         return
-
-    with open(file_path, "rb") as file:
-        st.download_button(
-            label=label,
-            data=file,
-            file_name=file_path.name,
-            mime=mime,
-        )
+    st.download_button(label=label, data=content, file_name=file_path.name, mime=mime)
 
 
 def show_empty_state(message: str) -> None:
@@ -94,17 +85,26 @@ def main() -> None:
         "and Monte Carlo robustness testing."
     )
 
-    scored_df = load_table("financial_sector_risk_scores.csv")
-    profile_df = load_table("country_financial_risk_profiles.csv")
-    layer_summary_df = load_table("risk_layer_summary.csv")
-    scenario_df = load_table("scenario_results.csv")
-    scenario_summary_df = load_table("scenario_summary.csv")
-    monte_carlo_summary_df = load_table("monte_carlo_summary.csv")
-    source_register_df = load_table("source_register.csv")
-    live_source_status_df = load_table("live_source_status.csv")
-    market_signal_df = load_table("market_stress_signal.csv")
-    acled_signals_df = load_table("acled_country_signals.csv")
-    fatf_reference_df = load_table("fatf_sanctions_reference.csv")
+    try:
+        run, snapshot = read_snapshot(TABLES_DIR)
+    except SnapshotUnavailable as exc:
+        st.error(str(exc))
+        return
+    st.caption(f"Completed run: {run['run_id']}")
+    if run["mode"] == "demonstration":
+        st.warning("DEMONSTRATION: manually assigned seed inputs; not live evidence.")
+
+    scored_df = load_table("financial_sector_risk_scores.csv", snapshot)
+    profile_df = load_table("country_financial_risk_profiles.csv", snapshot)
+    layer_summary_df = load_table("risk_layer_summary.csv", snapshot)
+    scenario_df = load_table("scenario_results.csv", snapshot)
+    scenario_summary_df = load_table("scenario_summary.csv", snapshot)
+    monte_carlo_summary_df = load_table("monte_carlo_summary.csv", snapshot)
+    source_register_df = load_table("source_register.csv", snapshot)
+    live_source_status_df = load_table("live_source_status.csv", snapshot)
+    market_signal_df = load_table("market_stress_signal.csv", snapshot)
+    acled_signals_df = load_table("acled_country_signals.csv", snapshot)
+    fatf_reference_df = load_table("fatf_sanctions_reference.csv", snapshot)
 
     if scored_df.empty:
         st.error(
@@ -121,19 +121,19 @@ def main() -> None:
     show_download_button(
         REPORTS_DIR / "financial_sector_risk_report.pdf",
         "Download PDF Report",
-        "application/pdf",
+        "application/pdf", snapshot,
     )
 
     show_download_button(
         TABLES_DIR / "financial_sector_risk_scores.csv",
         "Download Risk Scores CSV",
-        "text/csv",
+        "text/csv", snapshot,
     )
 
     show_download_button(
         TABLES_DIR / "country_financial_risk_profiles.csv",
         "Download Country Profiles CSV",
-        "text/csv",
+        "text/csv", snapshot,
     )
 
     if filtered_df.empty:

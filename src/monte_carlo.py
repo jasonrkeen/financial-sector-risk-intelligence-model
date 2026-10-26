@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 
-from src.scoring import classify_risk_band
+from src.scoring import classify_risk_band, validate_scored_inputs
 
 
 LAYER_COLUMNS = [
@@ -49,6 +49,7 @@ def run_monte_carlo_simulation(
     whether rankings and scores are stable when input assumptions vary.
     """
 
+    validate_scored_inputs(scored_df)
     rng = np.random.default_rng(random_seed)
     simulation_records = []
 

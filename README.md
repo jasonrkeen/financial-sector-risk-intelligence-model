@@ -85,7 +85,7 @@ Uses authenticated ACLED access to pull recent political violence, protest, fata
 
 ### Manual Seed Dataset
 
-Provides a fallback dataset so the pipeline can continue running if live data sources are unavailable.
+Provides manually assigned demonstration inputs only when `--demo` is explicitly selected. Live World Bank failures stop the run instead of silently substituting seed values.
 
 ## Methodology
 
@@ -289,7 +289,38 @@ Run the full model pipeline:
 python main.py
 ```
 
-This will generate updated tables, charts, raw data files, processed data files, Monte Carlo outputs, scenario outputs, source-status diagnostics, and the PDF report.
+This generates tables, charts, raw and processed data, simulations, source-status diagnostics, and the PDF report. Live mode requires a successful World Bank pull. An ACLED failure leaves the valid macro inputs intact and applies no event adjustment. Market-source fallback scoring remains unchanged and is labeled in the source status.
+
+Run an explicitly labeled, fully offline demonstration:
+
+```powershell
+python main.py --demo
+```
+
+`build_financial_risk_dataset(use_live_data=False)` also makes no network requests. Demo outputs overwrite the usual output paths and carry `data_mode=demonstration`; the PDF includes a demonstration notice.
+
+The pipeline fetches each connector once and saves that exact evidence. Source diagnostics are generated after the current run's outputs, with source status separate from file availability. A populated file is not proof of live data.
+
+The dashboard now reads `outputs/tables/run_snapshot.zip`, an atomic snapshot of the completed run's tables and PDF, verified against `run_status.json`. It displays and downloads the same bytes without a filename-only cache. A running, failed, interrupted, corrupt, or legacy run without a completed snapshot is not displayed. After upgrading, regenerate outputs once. Loose CSVs and PDFs are pipeline working artifacts and may be partial after a failure; downstream consumers should use the verified snapshot through `src.publication.read_snapshot`.
+
+Concurrent pipeline writers are refused by `outputs/tables/.pipeline.lock`. Normal exceptions release the lock and mark the run failed. After a hard process termination, confirm that no pipeline process is still running before manually removing the lock and rerunning. The previous archive is preserved on failures before replacement, but is not presented as the current run.
+
+ACLED uses [cursor pagination](https://acleddata.com/api-documentation/elements-acleds-api), checks completion and reported totals, deduplicates event IDs, and rejects conflicting records, stalled cursors, and invalid country/date coverage. Countries absent from a response remain coverage-unverified rather than being assigned zero event risk. No authenticated live ACLED validation is implied by the offline tests.
+
+World Bank indicator values and individual observation years are retained. Existing missing-value substitutions, scaling, weights, risk thresholds, reference values, scenario multipliers, and simulation assumptions are unchanged; their methodological review remains a later phase. The primary-driver label now uses weighted contribution. Missing/nonfinite scores are labeled `Unknown`, and layer means no longer silently skip missing components.
+
+Unknown/nonfinite model scores are rejected before ranking, scenarios, and Monte Carlo simulation. ACLED fatality values must be numeric, finite, and nonnegative; invalid values cause the event layer to be unavailable rather than being treated as observed zeros.
+
+## Regression Tests
+
+```powershell
+pip install -r requirements-dev.txt
+python -m pytest -q
+```
+
+Tests use synthetic/mocked responses with network access blocked. They cover source failures, offline mode, pagination/completeness, missing coverage, weighted drivers, missing scores, indicator years, single-fetch exports, first/repeated-run diagnostics, baseline scenario equivalence, and seeded simulation reproducibility.
+
+Additional regressions cover invalid ACLED fatality values, invalid downstream scoring inputs, failed/interrupted publication, concurrent writers, archive corruption and run mismatch, snapshot-write failure, and Streamlit refresh/download consistency.
 
 ## Running the Dashboard
 

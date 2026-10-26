@@ -22,3 +22,6 @@ def ensure_directories() -> None:
         REPORTS_DIR,
     ]:
         path.mkdir(parents=True, exist_ok=True)
+
+# Stop incomplete or looping API downloads rather than score partial data.
+ACLED_MAX_PAGES = 1000

@@ -2,7 +2,6 @@ import pandas as pd
 
 from src.config import TABLES_DIR
 from src.fatf_sanctions import build_fatf_reference_table
-from src.source_status import build_live_source_status_table
 
 
 def build_country_profile_table(df: pd.DataFrame) -> pd.DataFrame:
@@ -50,7 +49,7 @@ def build_risk_layer_summary(df: pd.DataFrame) -> pd.DataFrame:
     return summary
 
 
-def build_source_register() -> pd.DataFrame:
+def build_source_register(source_status: dict[str, str] | None = None) -> pd.DataFrame:
     """Build a source register for active, reference, fallback, and planned sources."""
 
     records = [
@@ -105,18 +104,29 @@ def build_source_register() -> pd.DataFrame:
         },
     ]
 
+    aliases = {"Market data connector": "Market data", "ACLED": "ACLED live event data",
+               "FATF public lists": "FATF / sanctions reference"}
+    for record in records:
+        name = aliases.get(record["source_name"], record["source_name"])
+        if name == "Manual seed dataset":
+            record["status"] = (
+                "Demonstration only" if "demonstration" in (source_status or {}).get("World Bank API", "")
+                else "Not used" if source_status is not None else "Unknown: no run status supplied"
+            )
+            record["notes"] = "Manually assigned demonstration inputs; selected explicitly with --demo."
+        if name in {"World Bank API", "Market data", "ACLED live event data", "FATF / sanctions reference"}:
+            record["status"] = (source_status or {}).get(name, "Unknown: no run status supplied")
     return pd.DataFrame(records)
 
 
-def save_outputs(scored_df: pd.DataFrame) -> None:
+def save_outputs(scored_df: pd.DataFrame, source_status: dict[str, str] | None = None) -> None:
     """Save model output tables."""
 
     full_output = scored_df.copy()
     country_profiles = build_country_profile_table(scored_df)
     layer_summary = build_risk_layer_summary(scored_df)
-    source_register = build_source_register()
+    source_register = build_source_register(source_status)
     fatf_reference = build_fatf_reference_table()
-    live_source_status = build_live_source_status_table()
 
     full_output.to_csv(
         TABLES_DIR / "financial_sector_risk_scores.csv",
@@ -143,10 +153,6 @@ def save_outputs(scored_df: pd.DataFrame) -> None:
         index=False,
     )
 
-    live_source_status.to_csv(
-        TABLES_DIR / "live_source_status.csv",
-        index=False,
-    )
 
 
 def save_scenario_outputs(
