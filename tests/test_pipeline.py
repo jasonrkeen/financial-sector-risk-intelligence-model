@@ -17,7 +17,11 @@ def test_pipeline_fetches_once_exports_used_evidence_and_refreshes_status(monkey
     monkeypatch.setattr(main, "ensure_directories", lambda: None)
     monkeypatch.setattr(main, "generate_visualizations", lambda *args: None)
     monkeypatch.setattr(main, "generate_monte_carlo_visualizations", lambda *args: None)
-    monkeypatch.setattr(main, "generate_pdf_report", lambda **kwargs: None)
+    report = tmp_path / "financial_sector_risk_report.pdf"
+    def make_report(**kwargs):
+        report.write_bytes(b"synthetic report fixture")
+        return report
+    monkeypatch.setattr(main, "generate_pdf_report", make_report)
     monkeypatch.setattr(main, "print_summary", lambda *args: None)
     simulation = main.run_monte_carlo_simulation
     monkeypatch.setattr(main, "run_monte_carlo_simulation", lambda scored_df, **kwargs:

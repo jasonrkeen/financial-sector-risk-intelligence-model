@@ -140,6 +140,7 @@ def identify_primary_driver(row: pd.Series) -> str:
 def add_driver_analysis(df: pd.DataFrame) -> pd.DataFrame:
     """Add primary driver and ranked output fields."""
 
+    validate_scored_inputs(df)
     scored = df.copy()
 
     scored["primary_risk_driver"] = scored.apply(identify_primary_driver, axis=1)
@@ -152,3 +153,13 @@ def add_driver_analysis(df: pd.DataFrame) -> pd.DataFrame:
     scored.insert(0, "rank", np.arange(1, len(scored) + 1))
 
     return scored
+
+
+def validate_scored_inputs(df: pd.DataFrame) -> None:
+    """Unknown scores are diagnostic values, not valid ranking/simulation inputs."""
+    columns = ["market_stress_risk", "financial_crime_exposure_risk",
+               "governance_regulatory_risk", "banking_macro_stress_risk",
+               "sanctions_geopolitical_risk", "cyber_operational_risk",
+               "financial_sector_risk_score"]
+    if df.empty or not np.isfinite(df[columns].to_numpy(dtype=float)).all():
+        raise ValueError("Ranking and simulation require finite scores for every jurisdiction")

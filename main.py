@@ -33,6 +33,7 @@ from src.monte_carlo import (
     build_monte_carlo_summary,
 )
 from src.report_generator import generate_pdf_report
+from src.publication import publishing_run, Publication
 
 
 def print_summary(scored_df: pd.DataFrame) -> None:
@@ -115,7 +116,11 @@ def run_pipeline(use_live_data: bool = True) -> pd.DataFrame:
     """Run the complete financial-sector risk model pipeline."""
 
     ensure_directories()
+    with publishing_run(TABLES_DIR, "live" if use_live_data else "demonstration") as publication:
+        return _run_pipeline(use_live_data, publication)
 
+
+def _run_pipeline(use_live_data: bool, publication: Publication) -> pd.DataFrame:
     bundle = build_input_bundle(use_live_data=use_live_data)
     input_df = bundle.dataset
     input_df.to_csv(RAW_DIR / "live_financial_risk_dataset.csv", index=False)
@@ -147,7 +152,7 @@ def run_pipeline(use_live_data: bool = True) -> pd.DataFrame:
     generate_visualizations(scored_df)
     generate_monte_carlo_visualizations(monte_carlo_df, monte_carlo_summary)
 
-    generate_pdf_report(
+    report_path = generate_pdf_report(
         scored_df=scored_df,
         scenario_summary=scenario_summary,
         monte_carlo_summary=monte_carlo_summary,
@@ -157,6 +162,7 @@ def run_pipeline(use_live_data: bool = True) -> pd.DataFrame:
     build_live_source_status_table(bundle.source_status).to_csv(
         TABLES_DIR / "live_source_status.csv", index=False,
     )
+    publication.complete(report_path)
     print_summary(scored_df)
 
     return scored_df

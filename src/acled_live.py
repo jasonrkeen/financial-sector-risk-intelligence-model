@@ -228,10 +228,9 @@ def fetch_acled_events(
         errors="coerce",
     )
 
-    events["fatalities"] = pd.to_numeric(
-        events.get("fatalities", 0),
-        errors="coerce",
-    ).fillna(0)
+    events["fatalities"] = pd.to_numeric(events["fatalities"], errors="coerce")
+    if not np.isfinite(events["fatalities"]).all() or (events["fatalities"] < 0).any():
+        raise RuntimeError("ACLED contains invalid fatalities; event coverage cannot be scored")
 
     events["latitude"] = pd.to_numeric(
         events.get("latitude", np.nan),
