@@ -4,6 +4,20 @@ A standalone public-source financial-sector risk intelligence framework for juri
 
 This project combines live public data, authenticated event data, reference risk layers, scenario analysis, Monte Carlo robustness testing, visualizations, a PDF report, and a Streamlit dashboard to support structured review of financial-sector risk conditions across selected jurisdictions.
 
+## Reproduction and validation status
+
+Evidence reviewed November 18, 2026. A documented run path is available; a verified end-to-end reproduction is not established by this documentation review.
+
+| Item | Status and evidence |
+| --- | --- |
+| Version and revision | No GitHub release was listed at review. Reviewed revision: [4979318](https://github.com/jasonrkeen/financial-sector-risk-intelligence-model/tree/4979318ee1fdd6c83a9f876d0f6fedde90fb9569); use `git checkout 4979318ee1fdd6c83a9f876d0f6fedde90fb9569` to inspect that revision. |
+| Inputs and dates | The pipeline combines live-source requests, manually maintained references, and seed proxies on fallback. The [FATF/sanctions layer](src/fatf_sanctions.py) records June 15, 2026 as its last review date; this is not a current sanctions-status certification. There is no single frozen input vintage for the full run. |
+| Environment and access | [Requirements](requirements.txt) are unpinned, and no tested Python-version matrix is recorded. Follow [Setup](#setup); live pulls require network access, and ACLED uses credentials in a local, uncommitted `.env`. Inspect source-status diagnostics and fallback warnings. |
+| Run from the repository root | In a virtual environment: `python -m pip install -r requirements.txt`, then `python main.py`. Optional dashboard: `streamlit run app.py`. Run in a separate working copy when preserving existing local outputs: the pipeline writes to fixed output paths. |
+| Expected outputs | The [pipeline](main.py) writes score, scenario, source-status, and Monte Carlo tables to `outputs/tables/`, charts to `outputs/charts/`, and `outputs/reports/financial_sector_risk_report.pdf`. These are code-defined destinations, not a newly verified run receipt. |
+| Verification evidence | The reviewed tree has no automated test suite, Actions workflow, or recorded reproduction receipt. The pipeline sets 1,000 Monte Carlo draws, noise standard deviation 7.5, and seed 42; deterministic random draws alone do not freeze live inputs or dependencies. |
+| Validation limits | Scores are analyst-defined proxies. Monte Carlo band shares measure sensitivity to specified perturbations, not real-world event probabilities. Predictive validity, calibrated probabilities, and independent reproducibility are not established. A completed run can contain fallback inputs; see [data assembly](src/data_sources.py) and [Limitations](#limitations). |
+
 ## Responsible Use
 
 This project is for research, education, and strategic risk analysis.
