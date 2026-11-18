@@ -9,7 +9,8 @@ Public-source financial-sector risk intelligence framework with live data layers
 
 ## Folder structure
 - `assets/` (5 files)
-- `src/` (14 files)
+- `src/` (model modules and offline sample)
+- `tests/` and `data/sample/`
 - `README.md`
 - `app.py`
 - `main.py`
@@ -21,7 +22,9 @@ Commands documented in README.md (referenced files exist):
 python -m venv .venv
 pip install -r requirements.txt
 ```
-- No automated tests exist yet; if adding them, use pytest under `tests/`.
+- Use Python 3.14.4 and pinned dependencies. Install `requirements-dev.txt` and run `python -m pytest -q`.
+- Offline demo: `python -m src.sample_run`; tests live under `tests/`.
+- Preserve baseline source hashes unless a model change is explicitly authorized. The synthetic sample does not validate live inputs or predictive accuracy.
 
 ## Conventions observed
 - Functions use type hints; keep annotating new code.

@@ -1,0 +1,20 @@
+{
+  "reference_commit": "7e4c45256cbf6c1b49c567c46d296746b58f20fb",
+  "sha256_lf": {
+    "main.py": "ff260a4a9ab565ce951992d4c63f9cb10056a9921d4efb1e8851343e516e608b",
+    "src/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "src/acled_live.py": "fc994d28e9e6c94ae78c0970af6c201b457cfc7b177e8d431bd75644c883b67b",
+    "src/config.py": "e940ecea3656f224b282a55c64e754b1640bf48ae10388e64f2eb63cdabf91a2",
+    "src/data_sources.py": "3a010091b562ba389dc6ef28be02df67931d8a43727ee31eef184bff2be089a6",
+    "src/fatf_sanctions.py": "86c23e5ea52a5695c32d45f25a0a94fa699d07a39193c54bb87be5a868c7c9ac",
+    "src/market_data.py": "2fa8bd22fa187a4ada767e515680c380d04f7c8cc43b38d2e79a8d04b824b4f1",
+    "src/monte_carlo.py": "36d0477433697374657c4e5b64d2a4efec41e5038974ca772053a0403c53ba22",
+    "src/outputs.py": "5a1ea4cd1ceccb4dab7acc6f8e49936b03c623d2480425d77f976f5290c27506",
+    "src/report_generator.py": "6ae4c6dc7bce301eb7e92e71d19f7de5efee8af767b9ee83840d17124d0b62e0",
+    "src/scenarios.py": "630ba75dc2cdbe5208879c88e35bb4dd14f6de7b35902ed55fd3556774b3dbe6",
+    "src/scoring.py": "e1256537e32bff06737037ad5445a828f5db3fcf35421285715bc60ec79f0231",
+    "src/source_status.py": "900d3a50867db2af0cb8b55a198b4f91c0a802f98fcb917043d2b6f15204709c",
+    "src/visualization.py": "2b7a33aefd1cf43aca975ade6b538ca933dc4e4d9a16beae71700e90998916e3",
+    "src/world_bank_live.py": "c2d716cc718359fa1cfc72a3e73ce44d55e3e6214327b865aabdc8b97cc1b673"
+  }
+}

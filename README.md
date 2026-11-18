@@ -6,17 +6,53 @@ This project combines live public data, authenticated event data, reference risk
 
 ## Reproduction and validation status
 
-Evidence reviewed November 18, 2026. A documented run path is available; a verified end-to-end reproduction is not established by this documentation review.
+Evidence reviewed November 18, 2026. The offline synthetic demonstration is tested separately from the live-data pipeline. Software checks do not establish empirical model validity.
 
 | Item | Status and evidence |
 | --- | --- |
-| Version and revision | No GitHub release was listed at review. Reviewed revision: [4979318](https://github.com/jasonrkeen/financial-sector-risk-intelligence-model/tree/4979318ee1fdd6c83a9f876d0f6fedde90fb9569); use `git checkout 4979318ee1fdd6c83a9f876d0f6fedde90fb9569` to inspect that revision. |
-| Inputs and dates | The pipeline combines live-source requests, manually maintained references, and seed proxies on fallback. The [FATF/sanctions layer](src/fatf_sanctions.py) records June 15, 2026 as its last review date; this is not a current sanctions-status certification. There is no single frozen input vintage for the full run. |
-| Environment and access | [Requirements](requirements.txt) are unpinned, and no tested Python-version matrix is recorded. Follow [Setup](#setup); live pulls require network access, and ACLED uses credentials in a local, uncommitted `.env`. Inspect source-status diagnostics and fallback warnings. |
-| Run from the repository root | In a virtual environment: `python -m pip install -r requirements.txt`, then `python main.py`. Optional dashboard: `streamlit run app.py`. Run in a separate working copy when preserving existing local outputs: the pipeline writes to fixed output paths. |
-| Expected outputs | The [pipeline](main.py) writes score, scenario, source-status, and Monte Carlo tables to `outputs/tables/`, charts to `outputs/charts/`, and `outputs/reports/financial_sector_risk_report.pdf`. These are code-defined destinations, not a newly verified run receipt. |
-| Verification evidence | The reviewed tree has no automated test suite, Actions workflow, or recorded reproduction receipt. The pipeline sets 1,000 Monte Carlo draws, noise standard deviation 7.5, and seed 42; deterministic random draws alone do not freeze live inputs or dependencies. |
-| Validation limits | Scores are analyst-defined proxies. Monte Carlo band shares measure sensitivity to specified perturbations, not real-world event probabilities. Predictive validity, calibrated probabilities, and independent reproducibility are not established. A completed run can contain fallback inputs; see [data assembly](src/data_sources.py) and [Limitations](#limitations). |
+| Environment | Python 3.14.4 with exact runtime and transitive pins in [requirements.txt](requirements.txt); test dependencies in [requirements-dev.txt](requirements-dev.txt). Automated checks target Windows and Ubuntu; inspect the [latest workflow results](https://github.com/jasonrkeen/financial-sector-risk-intelligence-model/actions/workflows/tests.yml) for execution status. |
+| Offline reproduction | [Bundled fictional inputs](data/sample/README.md), seed 42, 1,000 draws, noise standard deviation 7.5. One command generates six CSVs, a chart, a sample PDF, and a manifest with input, code, dependency-file, and output hashes. Repeated files are tested for byte equality within the same environment. |
+| Verification | [28 test cases](tests/) cover hand-calculated scores, risk-band boundaries, clipping, scenarios, simulation invariants, repeatability, network isolation, and output protection. [Validation scope](docs/VALIDATION.md) records what this evidence establishes. |
+| Preserved model | Existing `main.py` and all pre-existing `src/` files are checked against [baseline source hashes](tests/preserved_source_hashes.json) from revision `7e4c452`. Scoring logic, published screenshots, and releases are unchanged. New dependency pins do not retrospectively reproduce historical outputs. |
+| Live inputs and access | Live-source requests, manual references, and fallback proxies are not a frozen input vintage. Network access and ACLED credentials are required for the relevant live sources. The [FATF/sanctions layer](src/fatf_sanctions.py) records June 15, 2026 as its review date, not a current sanctions-status certification. |
+| Live run and outputs | `python main.py` writes to fixed `outputs/tables/`, `outputs/charts/`, and `outputs/reports/` paths. Use a separate working copy to preserve existing local outputs. This live pipeline and dashboard have not been validated by the offline checks; inspect source-status diagnostics and fallback warnings. |
+| Validation limits | Scores are analyst-defined proxies. Simulation band shares measure sensitivity to perturbations, not event probabilities. Predictive validity, calibrated probabilities, and independent reproduction remain unestablished. See [Limitations](#limitations). |
+
+## Deterministic offline sample
+
+Use Python 3.14.4 in an activated virtual environment (see [Setup](#setup)):
+
+```bash
+python -m pip install -r requirements.txt
+python -m src.sample_run
+```
+
+The sample makes no network requests and requires no credentials. It calls the existing scoring, scenario, and Monte Carlo functions with four explicitly fictional jurisdictions:
+
+| Jurisdiction | Expected score | Band |
+| --- | ---: | --- |
+| Synthetic Delta | 90 | High |
+| Synthetic Gamma | 65 | Elevated |
+| Synthetic Beta | 40 | Moderate |
+| Synthetic Alpha | 10 | Low |
+
+Outputs go to `outputs/sample/`. The command refuses to overwrite an existing directory. For a second run, choose a new directory:
+
+```bash
+python -m src.sample_run --output-dir outputs/sample/repeat --seed 42 --simulations 1000
+```
+
+Relative output paths are resolved from the repository root. Within the repository, only destinations under `outputs/sample/` are allowed. A new external directory is also supported. The manifest records settings and environment; byte equality is promised only within the same recorded environment, not across operating systems or library versions. These sample artifacts are separate from the live report and published screenshots.
+
+### Automated checks
+
+```bash
+python -m pip install -r requirements-dev.txt
+python -m pip check
+python -m pytest -q
+```
+
+[GitHub Actions](.github/workflows/tests.yml) runs dependency checks, the test suite, and the full 1,000-draw sample on pushes and pull requests, on Windows and Ubuntu. Each successful job uploads its synthetic artifacts and manifest. Tests block network connections, including separate-process sample runs. The workflow also checks that tracked files remain unchanged.
 
 ## Responsible Use
 
@@ -275,20 +311,20 @@ financial-sector-risk-intelligence-model/
 
 ## Setup
 
-Create and activate a virtual environment:
+Use Python 3.14.4. Create and activate a virtual environment (Windows PowerShell):
 
 ```powershell
 python -m venv .venv
 .venv\Scripts\activate
 ```
 
-Install dependencies:
+On Linux/macOS, activate with `source .venv/bin/activate`. Install dependencies:
 
 ```powershell
 pip install -r requirements.txt
 ```
 
-Create a `.env` file in the project root if using ACLED:
+For the live ACLED connector, copy [.env.example](.env.example) to an uncommitted `.env` and fill in your credentials:
 
 ```env
 ACLED_USERNAME=your_username_here
@@ -364,8 +400,7 @@ Potential future improvements include:
 - More detailed sensitivity analysis
 - Historical backtesting
 - Expanded country coverage
-- Unit tests
-- GitHub Actions validation workflow
+- Broader live-connector and dashboard integration tests
 
 ## License
 

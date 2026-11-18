@@ -1,0 +1,5 @@
+country,region,market_stress_proxy,inflation_pressure,currency_pressure,financial_crime_exposure,corruption_risk,aml_cft_weakness,governance_weakness,regulatory_quality_weakness,banking_stress_proxy,sovereign_debt_pressure,sanctions_exposure,geopolitical_instability,cyber_operational_pressure
+Synthetic Alpha,Fictional Region,10,10,10,10,10,10,10,10,10,10,10,10,10
+Synthetic Beta,Fictional Region,40,40,40,40,40,40,40,40,40,40,40,40,40
+Synthetic Gamma,Fictional Region,65,65,65,65,65,65,65,65,65,65,65,65,65
+Synthetic Delta,Fictional Region,90,90,90,90,90,90,90,90,90,90,90,90,90

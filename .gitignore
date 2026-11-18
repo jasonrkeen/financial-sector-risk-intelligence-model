@@ -28,3 +28,5 @@ outputs/
 Thumbs.db
 .vscode/
 .idea/
+.pytest_cache/
+.ipynb_checkpoints/
