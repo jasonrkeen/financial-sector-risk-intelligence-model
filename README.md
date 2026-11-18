@@ -115,6 +115,8 @@ These scenarios are not forecasts. They are structured stress tests that help co
 
 ### Monte Carlo Robustness Testing
 
+Monte Carlo results describe score and ranking sensitivity under the specified input perturbations. Reported high-risk shares measure how often simulated scores cross the model's thresholds; they are not estimated probabilities of financial crime, institutional failure, or future events.
+
 Monte Carlo simulation adds controlled random variation to test score and rank stability. This helps show whether a jurisdiction's ranking is stable or sensitive to uncertainty in the input assumptions.
 
 The model outputs Monte Carlo summary fields such as:
@@ -124,7 +126,7 @@ The model outputs Monte Carlo summary fields such as:
 - Mean simulated rank
 - Best and worst simulated rank
 - Rank volatility
-- Elevated-or-high probability
+- Share of simulated draws in the elevated or high band (stored as `elevated_or_high_probability`)
 
 ### Source Status Diagnostics
 
